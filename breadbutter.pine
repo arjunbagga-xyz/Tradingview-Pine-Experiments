@@ -1,0 +1,30 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+//@version=5
+strategy("EMA Crossover with Trailing Stop", overlay=true)
+
+// Define EMAs
+ema5 = ta.ema(close, 5)
+ema20 = ta.ema(close, 20)
+
+// Plot EMAs
+plot(ema5, color=color.blue, title="EMA 5")
+plot(ema20, color=color.red, title="EMA 20")
+
+// Input for trailing stop
+trail_percent = input.float(2.0, title="Trailing Stop %", minval=0.1)
+
+// Variable for trailing stop
+var float trail_stop = 0
+
+// Entry: EMA5 crosses above EMA20
+if ta.crossover(ema5, ema20)
+    strategy.entry("Long", strategy.long)
+    trail_stop := close * (1 - trail_percent / 100)
+
+        // Update trailing stop
+if strategy.position_size > 0
+    trail_stop := math.max(trail_stop, close * (1 - trail_percent / 100))
+
+            // Exit: Price hits trailing stop
+if strategy.position_size > 0 and close <= trail_stop
+    strategy.close("Long", comment="Trailing Stop")
