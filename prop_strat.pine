@@ -1,0 +1,65 @@
+// @version=5
+strategy("EMA Crossover Strategy with Three EMAs", overlay=true)
+
+// --- INPUTS & PARAMETERS ---
+emaLength = input.int(3, "Entry EMA Length") // Entry EMA
+exitEmaLength = input.int(2, "Exit EMA Length") // Exit EMA
+longEmaLength = input.int(20, "Uptrend Filter EMA Length") // New: For isolated uptrend detection
+
+emaColor = color.new(color.blue, 0)
+exitEmaColor = color.new(color.red, 0)
+longEmaColor = color.new(color.green, 0) // New: Color for the long EMA
+
+// --- CALCULATIONS ---
+// Calculate the entry EMA
+entryEma = ta.ema(close, emaLength)
+
+// Calculate the exit EMA
+exitEma = ta.ema(close, exitEmaLength)
+
+// New: Calculate the long-term EMA for uptrend filter
+longEma = ta.ema(close, longEmaLength)
+
+// New: Isolated uptrend condition (price above long EMA)
+isClearUptrend = close > longEma
+
+// --- TIME FILTERING ---
+// Create a condition to check if the current bar is within the last year.
+// This calculates the timestamp for 365 days ago from the current moment.
+isLastYear = time > (timenow - 365 * 24 * 60 * 60 * 1000)
+
+// --- PLOTTING ---
+// Plot all EMAs on the chart
+plot(entryEma, "Entry EMA", color=emaColor)
+plot(exitEma, "Exit EMA", color=exitEmaColor)
+plot(longEma, "Uptrend Filter EMA", color=longEmaColor) // New: Plot the long EMA
+
+// --- ENTRY CONDITIONS ---
+// Short entry: Close above entry EMA, but not in clear uptrend
+shortEntryCondition = close > entryEma and not isClearUptrend
+
+// Long entry remains unchanged
+longEntryCondition = close < entryEma
+
+// --- EXIT CONDITIONS ---
+// Exit short position when price crosses back below the exit EMA
+shortExitCondition = close < exitEma
+
+// Exit long position when price crosses back above the exit EMA
+longExitCondition = close > exitEma
+
+// --- STRATEGY EXECUTION ---
+// Enter short if conditions are met
+if (shortEntryCondition and strategy.position_size == 0)
+    strategy.entry("Short", strategy.short)
+
+// Enter long if conditions are met
+if (longEntryCondition and strategy.position_size == 0)
+    strategy.entry("Long", strategy.long)
+
+// Exit long or short positions based on the exit EMA crossover
+if (strategy.position_size > 0 and longExitCondition)
+    strategy.close("Long", "Exit Long")
+
+if (strategy.position_size < 0 and shortExitCondition)
+    strategy.close("Short", "Exit Short")
