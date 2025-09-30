@@ -1,0 +1,23 @@
+//@version=5
+indicator("Breakout After Consolidation", overlay=true)
+
+// Parameters for consolidation detection
+length = input(20, title="Consolidation Period")
+threshold = input(1.5, title="Volume Multiplier")
+
+// Define the consolidation zone
+high_range = highest(high, length)
+low_range = lowest(low, length)
+consolidation = (high_range - low_range) < (atr(14) * 0.5)
+
+// Volume condition
+avg_volume = sma(volume, length)
+breakout_volume = volume > avg_volume * threshold
+
+// Detect breakout
+breakout_up = close > high_range and consolidation and breakout_volume
+breakout_down = close < low_range and consolidation and breakout_volume
+
+// Plot signals
+plotshape(breakout_up, color=color.green, style=shape.labelup, location=location.belowbar, text="Breakout Up")
+plotshape(breakout_down, color=color.red, style=shape.labeldown, location=location.abovebar, text="Breakout Down")
