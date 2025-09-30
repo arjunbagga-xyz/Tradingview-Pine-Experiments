@@ -1,0 +1,46 @@
+//@version=6
+strategy("Pump n Dump Sniper", overlay=true)
+
+// Input for threshold percentage
+thresholdPercent = input.float(15.0, "Threshold (%)")
+
+// Input for trailing stop in percentage
+trailingStopPercent = input.float(7.0, "Trailing Stop Loss (%)")
+
+// Calculate candle range as a percentage of the close
+candleRangePercent = (high - low) / close * 100
+
+// Condition for large green candles (range > threshold and close > open)
+isLargeGreenCandle = candleRangePercent > thresholdPercent and close > open
+
+// Condition for 2 consecutive large green candles
+isTwoConsecutiveLargeGreenCandles = isLargeGreenCandle and isLargeGreenCandle[1] and close[1] > open[1]
+
+// Condition for marking the candle after 2 consecutive large green candles
+isAfterTwoConsecutiveLargeGreenCandles = isTwoConsecutiveLargeGreenCandles[1] and close > open 
+
+// Plot markers for visualization
+plotshape(isAfterTwoConsecutiveLargeGreenCandles, style=shape.labelup, location=location.belowbar, color=color.green, size=size.small, title="Green Marker")
+plotshape(isLargeGreenCandle, style=shape.labelup, location=location.belowbar, color=color.fuchsia, size=size.small, title="Large Green Candle")
+plotshape(isTwoConsecutiveLargeGreenCandles, style=shape.labelup, location=location.belowbar, color=color.blue, size=size.small, title="Blue Marker (2 Large Green Candles)")
+
+// Entry condition: Check for two consecutive blue markers
+enterLong = isTwoConsecutiveLargeGreenCandles and isTwoConsecutiveLargeGreenCandles[1]
+
+// Exit condition: First green marker after entering position
+exitLong = isAfterTwoConsecutiveLargeGreenCandles and strategy.position_size > 0
+
+// Create strategy orders for entry
+if enterLong
+    strategy.entry("EnterLong", strategy.long)
+
+// Calculate trailing stop parameters
+trailOffset = trailingStopPercent / 100 * strategy.position_avg_price
+trailStartPrice = strategy.position_avg_price  // Trailing stop starts at the entry price
+
+// Add trailing stop loss
+strategy.exit("ExitLong", "EnterLong", trail_price=trailStartPrice, trail_offset=trailOffset)
+
+// Ensure green marker exit works alongside trailing stop
+if exitLong
+    strategy.close("EnterLong")
