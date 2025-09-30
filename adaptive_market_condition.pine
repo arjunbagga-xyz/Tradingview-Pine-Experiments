@@ -1,0 +1,62 @@
+//@version=5
+strategy("Adaptive Market Condition Strategy", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=30, max_bars_back=5000)
+
+// --- Parameters ---
+stopLossPerc = input.float(5, "Stop Loss (%)")
+targetPerc = input.float(5, "Take Profit (%)")
+volatilityThreshold = input.float(1.5, "Volatility Threshold Multiplier")
+
+// --- Moving Averages and ATR ---
+fastSMA = ta.sma(close, 10)
+slowSMA = ta.sma(close, 50)
+atrValue = ta.atr(14)
+
+// --- Market Condition Detection ---
+isBullFast = (close > fastSMA and fastSMA > slowSMA and atrValue > ta.sma(atrValue, 14) * volatilityThreshold)
+isBullSlow = (close > slowSMA and fastSMA > slowSMA and atrValue < ta.sma(atrValue, 14) * volatilityThreshold)
+isBearFast = (close < fastSMA and fastSMA < slowSMA and atrValue > ta.sma(atrValue, 14) * volatilityThreshold)
+isBearSlow = (close < slowSMA and fastSMA < slowSMA and atrValue < ta.sma(atrValue, 14) * volatilityThreshold)
+isSideways = (math.abs(fastSMA - slowSMA) < atrValue * 0.5)
+
+// --- Trade Count Management ---
+var int openTradeCount = 0  // Track the number of open trades
+
+// --- Entry and Exit Logic for Each Market Condition ---
+if (openTradeCount < 3)  // Limit to 3 open trades
+    if (isBullFast and ta.crossover(fastSMA, slowSMA))
+        strategy.entry("Long Bull Fast", strategy.long)
+        openTradeCount += 1  // Increment open trade count
+    else if (isBullSlow and (ta.crossover(fastSMA, slowSMA) or ta.rsi(close, 14) < 30))
+        strategy.entry("Long Bull Slow", strategy.long)
+        openTradeCount += 1
+    else if (isBearFast and ta.crossunder(fastSMA, slowSMA))
+        strategy.entry("Short Bear Fast", strategy.short)
+        openTradeCount += 1
+    else if (isBearSlow and ta.rsi(close, 14) > 70)
+        strategy.entry("Short Bear Slow", strategy.short)
+        openTradeCount += 1
+    else if (isSideways)
+        support = ta.lowest(close, 20)
+        resistance = ta.highest(close, 20)
+        if (close <= support)
+            strategy.entry("Long Sideways", strategy.long)
+            openTradeCount += 1
+        else if (close >= resistance)
+            strategy.entry("Short Sideways", strategy.short)
+            openTradeCount += 1
+
+// --- Exit Logic ---
+for i = 0 to (strategy.opentrades - 1)
+    entryPrice = strategy.opentrades.entry_price(i)
+    if entryPrice > 0
+        stopLossPrice = entryPrice * (1 - stopLossPerc / 100)
+        takeProfitPrice = entryPrice * (1 + targetPerc / 100)
+        strategy.exit("Exit", from_entry=na, stop=stopLossPrice, limit=takeProfitPrice)
+        openTradeCount -= 1  // Decrement count on exit
+
+// --- Visual Markers ---
+plotshape(series=isBullFast, title="Fast Bull", location=location.belowbar, color=color.green, style=shape.labelup, text="Bull Fast")
+plotshape(series=isBullSlow, title="Slow Bull", location=location.belowbar, color=color.green, style=shape.labelup, text="Bull Slow")
+plotshape(series=isBearFast, title="Fast Bear", location=location.abovebar, color=color.red, style=shape.labeldown, text="Bear Fast")
+plotshape(series=isBearSlow, title="Slow Bear", location=location.abovebar, color=color.red, style=shape.labeldown, text="Bear Slow")
+plotshape(series=isSideways, title="Sideways", location=location.belowbar, color=color.gray, style=shape.circle, text="Sideways")
