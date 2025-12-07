@@ -1,0 +1,82 @@
+//@version=5
+strategy("Scaling Strategy with Magic Number", overlay=true, 
+         default_qty_type=strategy.percent_of_equity, initial_capital=100)
+
+// Inputs
+risk_magic = input.int(4, "Risk Magic", minval=1, maxval=10)
+trailing_percent = input.float(2.0, "Trailing %", minval=0.1, maxval=10)
+entry_percent = 100 / risk_magic  // e.g., 25% for risk_magic=4
+
+// Calculate position size (25% of equity)
+position_size_percent = entry_percent
+
+// EMAs
+ema5 = ta.ema(close, 5)
+ema20 = ta.ema(close, 20)
+ema_cross_up = ta.crossover(ema5, ema20)
+ema_cross_down = ta.crossunder(ema5, ema20)
+
+// Arrays to track lots
+var float[] entry_prices = array.new_float(0)
+var float[] highest_prices = array.new_float(0)
+var int max_lots = risk_magic
+var int current_lots = 0
+var bool in_position = false
+
+// Calculate if price moved 2% from reference
+price_up_2_percent(price, ref) => 
+    (price - ref) / ref * 100 >= trailing_percent
+
+price_down_2_percent(price, ref) => 
+    (ref - price) / ref * 100 >= trailing_percent
+
+// Entry logic - Initial entry
+if ema_cross_up and not in_position and current_lots == 0
+    strategy.entry("Lot1", strategy.long)
+    array.push(entry_prices, close)
+    array.push(highest_prices, close)
+    current_lots := 1
+    in_position := true
+
+// When in position, check for scaling
+if in_position
+    // Update highest prices for each lot
+    for i = 0 to array.size(highest_prices) - 1
+        if close > array.get(highest_prices, i)
+            array.set(highest_prices, i, close)
+    
+    // Check for new entry (price up 2% from last entry)
+    if current_lots > 0
+        last_entry = array.get(entry_prices, array.size(entry_prices) - 1)
+        if current_lots < max_lots and price_up_2_percent(close, last_entry)
+            strategy.entry("Lot" + str.tostring(current_lots + 1), strategy.long)
+            array.push(entry_prices, close)
+            array.push(highest_prices, close)
+            current_lots := current_lots + 1
+    
+    // Check for exits (price down 2% from highest for any lot)
+    for i = 0 to array.size(highest_prices) - 1
+        current_highest = array.get(highest_prices, i)
+        if price_down_2_percent(close, current_highest)
+            // Exit this lot
+            strategy.close("Lot" + str.tostring(i + 1))
+            array.remove(highest_prices, i)
+            array.remove(entry_prices, i)
+            current_lots := current_lots - 1
+            break  // Exit one at a time
+    
+    // If all lots exited, reset
+    if current_lots == 0
+        in_position := false
+
+// Exit all on EMA cross down (optional safety)
+if ema_cross_down and in_position
+    strategy.close_all()
+    array.clear(entry_prices)
+    array.clear(highest_prices)
+    current_lots := 0
+    in_position := false
+
+// Plotting
+plot(ema5, "EMA 5", color=color.blue)
+plot(ema20, "EMA 20", color=color.red)
