@@ -1,0 +1,22 @@
+//@version=5
+strategy("Cross Two Bars Back (HA Signals, Standard Execution)", overlay=true, pyramiding=0, process_orders_on_close=true)
+
+// 1. Get standard OHLC data (always from the symbol's real market prices)
+[stdOpen, stdHigh, stdLow, stdClose] = request.security(syminfo.tickerid, timeframe.period, [open, high, low, close])
+
+// 2. Calculate Heikin Ashi values from standard data
+haClose = (stdOpen + stdHigh + stdLow + stdClose) / 4
+haOpen  = (stdOpen + nz(haClose[1], stdOpen)) / 2
+haHigh  = math.max(stdHigh, haOpen, haClose)
+haLow   = math.min(stdLow,  haOpen, haClose)
+
+// 3. Entry/exit conditions based on Heikin Ashi values
+entry_condition = ta.crossover(haClose, haHigh[2])   // HA close crosses above HA high of two bars ago
+exit_condition  = ta.crossunder(haClose, haLow[2])   // HA close crosses below HA low of two bars ago
+
+// 4. Execute trades at market (standard prices are used because the script runs on a standard chart)
+if entry_condition
+    strategy.entry("Long", strategy.long)
+
+if exit_condition
+    strategy.close("Long")
